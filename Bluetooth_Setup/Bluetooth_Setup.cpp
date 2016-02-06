@@ -1,4 +1,5 @@
-#include <SoftwareSerial.h>
+#include <Bluetooth_Setup.h>
+
 
 /*
  *  This is a project that helps changing the display name, the pincode and baud rate to the Bluetooth JY-MCU (HC-06) module. 
@@ -6,17 +7,18 @@
  *  It's really helpful the first time you use this module and you don't know the default settings.
  *  
  *  It scans every baud rate and finds the one that it's currently in use. Then it sets it to the desired one.
+ *  
+ *
+ *  NAME maximum of 20 characters
+ *  char NAME[21] = "My UbiPet";
+ *
+ *  4 digit numeric pin
+ *  char PIN[5] = "1234";
+ *
+ *  the RX of the Arduino (in this case pin 6) MUST go in the TX pin on the bluetooth module
+ *  the TX of the Arduino (in this case pin 7) MUST go in the RX pin on the bluetooth module
  */
 
-//the RX of the Arduino (in this case pin 6) MUST go in the TX pin on the bluetooth module
-//the TX of the Arduino (in this case pin 7) MUST go in the RX pin on the bluetooth module
-SoftwareSerial bluetoothSerial(7, 6); // RX, TX
-
-// NAME maximum of 20 characters
-char NAME[21] = "UbiPet";
-
-// 4 digit numeric pin
-char PIN[5] = "0000";
 /*
   character code for BAUD
   1 for 1200 bps
@@ -32,44 +34,29 @@ char PIN[5] = "0000";
   B   921600 bps
   C  1382400 bps
 */
-char BAUD = '4';
 
-void setup() {
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
-
-  // ------ bluetooth module ------
-  setBluetoothParameters(bluetoothSerial);
-
-  initBluetoothModule(bluetoothSerial);
-
+BluetoothSetup::BluetoothSetup(){
+	
 }
 
-void loop() {
+void BluetoothSetup::checkAndInit(int RX, int TX, char* desiredName, char* desiredPin, char desiredBaud) {
+  SoftwareSerial* bluetoothSerial = setupBT(RX, TX, desiredName, desiredPin, desiredBaud);
 
-  /*
-   * here you can listen to incoming messages to the module and make actions
-   */
-
-}
-
-void initBluetoothModule(SoftwareSerial btConnection) {
   Serial.println("Wiping and initializing Bluetooth module...");
-
   // we wipe the memory to avoid trash on caché. The we initialize the module
-  bluetoothSerial.flush();
+  bluetoothSerial->flush();
   delay(500);
-  bluetoothSerial.begin(115200);
-  bluetoothSerial.print("$$$");
+  bluetoothSerial->begin(115200);
+  bluetoothSerial->print("$$$");
   delay(100);
-  bluetoothSerial.println("U,9600,N");
-  bluetoothSerial.begin(9600);
+  bluetoothSerial->println("U,9600,N");
+  bluetoothSerial->begin(9600);
   delay(2000);
-  bluetoothSerial.print("AT"); // "AT" will respond with "OK" if it is working
+  bluetoothSerial->print("AT"); // "AT" will respond with "OK" if it is working
   delay(2000);
   char response[21];
-  while (bluetoothSerial.available() < 0);
-  bluetoothSerial.readBytes(response, 2);
+  while (bluetoothSerial->available() < 0);
+  bluetoothSerial->readBytes(response, 2);
 
   String r = "";
   r.concat(response);
@@ -86,7 +73,9 @@ void initBluetoothModule(SoftwareSerial btConnection) {
   }
 }
 
-void setBluetoothParameters(SoftwareSerial btConnection) {
+SoftwareSerial* BluetoothSetup::setupBT(int RX, int TX, char* desiredName, char* desiredPin, char desiredBaud) {
+  SoftwareSerial* bluetoothSerial = new SoftwareSerial(RX, TX);
+
   char response[21]; // Storage for responses from module
   int rv = 0; // return value
   int found = 0; // module found
@@ -97,11 +86,11 @@ void setBluetoothParameters(SoftwareSerial btConnection) {
   long baud[12] = {1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600, 1382400};
   for (int a = 0; a < 12; a++)
   {
-    btConnection.begin(baud[a]);
-    btConnection.write("AT"); // "AT" will respond with "OK" if it is working
+    bluetoothSerial->begin(baud[a]);
+    bluetoothSerial->write("AT"); // "AT" will respond with "OK" if it is working
     delay(100);
-    while (btConnection.available() < 0);
-    btConnection.readBytes(response, 2);
+    while (bluetoothSerial->available() < 0);
+    bluetoothSerial->readBytes(response, 2);
     Serial.println(response);
     if (strncmp(response, "OK", 2) == 0)
     {
@@ -124,12 +113,12 @@ void setBluetoothParameters(SoftwareSerial btConnection) {
   }
   delay(100);
 
-  btConnection.write("AT+VERSION"); // Check the firmware version, because we can
-  while (btConnection.available() < 0);
-  btConnection.readBytes(response, 2);
+  bluetoothSerial->write("AT+VERSION"); // Check the firmware version, because we can
+  while (bluetoothSerial->available() < 0);
+  bluetoothSerial->readBytes(response, 2);
   if (strncmp(response, "OK", 2) == 0)
   {
-    rv = btConnection.readBytes(response, 20);
+    rv = bluetoothSerial->readBytes(response, 20);
     response[rv] = 0;
     Serial.print("BT Module Firmware Version: ");
     Serial.println(response);
@@ -140,14 +129,14 @@ void setBluetoothParameters(SoftwareSerial btConnection) {
   }
   delay(100);
 
-  btConnection.write("AT+NAME"); // Set the bluetooth device name
-  btConnection.write(NAME);
-  while (btConnection.available() < 0);
-  btConnection.readBytes(response, 9);
+  bluetoothSerial->write("AT+NAME"); // Set the bluetooth device name
+  bluetoothSerial->write(desiredName);
+  while (bluetoothSerial->available() < 0);
+  bluetoothSerial->readBytes(response, 9);
   if (strncmp(response, "OKsetname", 9) == 0)
   {
     Serial.print("Setting Name: ");
-    Serial.println(NAME);
+    Serial.println(desiredName);
   }
   else
   {
@@ -155,14 +144,14 @@ void setBluetoothParameters(SoftwareSerial btConnection) {
   }
   delay(100);
 
-  btConnection.write("AT+PIN"); // Set the PIN
-  btConnection.write(PIN);
-  while (btConnection.available() < 0);
-  btConnection.readBytes(response, 8);
+  bluetoothSerial->write("AT+PIN"); // Set the PIN
+  bluetoothSerial->write(desiredPin);
+  while (bluetoothSerial->available() < 0);
+  bluetoothSerial->readBytes(response, 8);
   if (strncmp(response, "OKsetPIN", 8) == 0)
   {
     Serial.print("Setting PIN: ");
-    Serial.println(PIN);
+    Serial.println(desiredPin);
   }
   else
   {
@@ -171,13 +160,13 @@ void setBluetoothParameters(SoftwareSerial btConnection) {
   }
   delay(100);
 
-  btConnection.write("AT+BAUD"); // Set the BAUD
-  btConnection.write(BAUD);
-  while (btConnection.available() < 0);
-  btConnection.readBytes(response, 2);
+  bluetoothSerial->write("AT+BAUD"); // Set the BAUD
+  bluetoothSerial->write(desiredBaud);
+  while (bluetoothSerial->available() < 0);
+  bluetoothSerial->readBytes(response, 2);
   if (strncmp(response, "OK", 2) == 0)
   {
-    rv = btConnection.readBytes(response, 7);
+    rv = bluetoothSerial->readBytes(response, 7);
     response[rv] = 0;
     Serial.print("Setting BAUD: ");
     Serial.println(response);
@@ -188,4 +177,6 @@ void setBluetoothParameters(SoftwareSerial btConnection) {
     Serial.println(response);
   }
   Serial.println("Bluetooth Setup Completed");
+
+  return bluetoothSerial;
 }
